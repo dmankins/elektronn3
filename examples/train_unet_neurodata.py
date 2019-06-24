@@ -46,7 +46,8 @@ parser.add_argument(
 "onsave": Use regular Python model for training, but trace it on-demand for saving training state;
 "train": Use traced model for training and serialize it on disk"""
 )
-parser.add_argument('--seed', type=int, default=0, help='Base seed for all RNGs.')
+# Use an illegal seed value to indicate "no seed" (0 is a seed of 0, not random at all)
+parser.add_argument('--seed', type=int, default=-1, help='Base seed for all RNGs.')
 parser.add_argument(
     '--deterministic', action='store_true',
     help='Run in fully deterministic mode (at the cost of execution speed).'
@@ -55,9 +56,14 @@ args = parser.parse_args()
 
 # Set up all RNG seeds, set level of determinism
 random_seed = args.seed
-torch.manual_seed(random_seed)
-np.random.seed(random_seed)
-random.seed(random_seed)
+if random_seed < 0:
+    np.random.seed()
+    random.seed()
+else:
+    torch.manual_seed(random_seed)
+    np.random.seed(random_seed)
+    random.seed(random_seed)
+
 deterministic = args.deterministic
 if deterministic:
     torch.backends.cudnn.deterministic = True
@@ -99,6 +105,7 @@ enable_save_trace = False if args.jit == 'disabled' else True
 if args.jit == 'onsave':
     # Make sure that tracing works
     tracedmodel = torch.jit.trace(model, example_input.to(device))
+    model = tracedmodel
 elif args.jit == 'train':
     if getattr(model, 'checkpointing', False):
         raise NotImplementedError(
